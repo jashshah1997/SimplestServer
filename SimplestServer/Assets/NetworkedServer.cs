@@ -151,9 +151,18 @@ public class NetworkedServer : MonoBehaviour
                 GameSession newGameSession = new GameSession(playerWaitingForMatch, id);
                 gameSessions.AddLast(newGameSession);
 
+                // Determine player roles
+                int player1Response = SessionStartedResponses.CrossesPlayer;
+                int player2Respnse = SessionStartedResponses.CirclesPlayer;
+                if (Random.Range(0, 9) > 4)
+                {
+                    player1Response = SessionStartedResponses.CirclesPlayer;
+                    player2Respnse = SessionStartedResponses.CrossesPlayer;
+                }
+                    
                 // Pass a signifier to both clients that they've joined
-                SendMessageToClient(ServerToClientSignifiers.GameSessionStarted + "", id);
-                SendMessageToClient(ServerToClientSignifiers.GameSessionStarted + "", playerWaitingForMatch);
+                SendMessageToClient(ServerToClientSignifiers.GameSessionStarted + "," + player1Response, id);
+                SendMessageToClient(ServerToClientSignifiers.GameSessionStarted + "," + player2Respnse, playerWaitingForMatch);
                 playerWaitingForMatch = -1;
             }
             
@@ -225,6 +234,12 @@ public static class ServerToClientSignifiers
     public const int LoginResponse = 1;
     public const int GameSessionStarted = 2;
     public const int OpponentTicTacToePlay = 3;
+}
+
+public static class SessionStartedResponses
+{
+    public const int CirclesPlayer = 1;
+    public const int CrossesPlayer = 2;
 }
 
 public static class LoginResponses
