@@ -172,11 +172,14 @@ public class NetworkedServer : MonoBehaviour
             Debug.Log("our next action beckons");
 
             GameSession gs = FindGameSessionWithPlayerID(id);
+            
+            // We have the game state on the server, forward it to the other player
+            string currentGameState = csv[1];
 
             if (gs.playerID1 == id)
-                SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "", gs.playerID2);
+                SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "," + currentGameState, gs.playerID2);
             else
-                SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "", gs.playerID1);
+                SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "," + currentGameState, gs.playerID1);
         }
     }
 
