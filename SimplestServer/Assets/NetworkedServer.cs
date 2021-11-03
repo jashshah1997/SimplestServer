@@ -181,6 +181,20 @@ public class NetworkedServer : MonoBehaviour
             else
                 SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "," + currentGameState, gs.playerID1);
         }
+        else if (signifier == ClientToServerSignifiers.LeaveSession)
+        {
+            GameSession gs = FindGameSessionWithPlayerID(id);
+            if (gs == null)
+            {
+                // No session associated with the id
+                return;
+            }
+
+            // Notify both players that session is terminated
+            SendMessageToClient(ServerToClientSignifiers.SessionTerminated + "", gs.playerID1);
+            SendMessageToClient(ServerToClientSignifiers.SessionTerminated + "", gs.playerID2);
+            gameSessions.Remove(gs);
+        }
     }
 
     private void SavePlayerAccounts()
@@ -229,7 +243,7 @@ public static class ClientToServerSignifiers
     public const int CreateAccount = 2;
     public const int AddToGameSessionQueue = 3;
     public const int TicTacToePlay = 4;
-
+    public const int LeaveSession = 5;
 }
 
 public static class ServerToClientSignifiers
@@ -237,6 +251,7 @@ public static class ServerToClientSignifiers
     public const int LoginResponse = 1;
     public const int GameSessionStarted = 2;
     public const int OpponentTicTacToePlay = 3;
+    public const int SessionTerminated = 4;
 }
 
 public static class SessionStartedResponses
