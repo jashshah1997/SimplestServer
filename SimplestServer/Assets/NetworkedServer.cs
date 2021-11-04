@@ -121,6 +121,7 @@ public class NetworkedServer : MonoBehaviour
                     if (pa.password == password)
                     {
                         SendMessageToClient(ServerToClientSignifiers.LoginResponse + "," + LoginResponses.Success, id);
+                        pa.currentConnectionID = id;
                     }
                     else
                     {
@@ -195,6 +196,21 @@ public class NetworkedServer : MonoBehaviour
             SendMessageToClient(ServerToClientSignifiers.SessionTerminated + "", gs.playerID2);
             gameSessions.Remove(gs);
         }
+        else if (signifier == ClientToServerSignifiers.PlayerMessage)
+        {
+            GameSession gs = FindGameSessionWithPlayerID(id);
+            if (gs == null)
+            {
+                // No session associated with the id, no need to send the message
+                return;
+            }
+
+            string playerMessage = msg.Substring(2, msg.Length - 2);
+            if (gs.playerID1 == id)
+                SendMessageToClient(ServerToClientSignifiers.PlayerMessage + "," + playerMessage, gs.playerID2);
+            else
+                SendMessageToClient(ServerToClientSignifiers.PlayerMessage + "," + playerMessage, gs.playerID1);
+        }
     }
 
     private void SavePlayerAccounts()
@@ -236,6 +252,19 @@ public class NetworkedServer : MonoBehaviour
 
         return null;
     }
+
+    private PlayerAccount FindPlayerByConnectionID(int connectionID)
+    {
+        foreach (PlayerAccount pa in playerAccounts)
+        {
+            if (pa.currentConnectionID == connectionID)
+            {
+                return pa;
+            }
+        }
+
+        return null;
+    }
 }
 public static class ClientToServerSignifiers
 {
@@ -244,6 +273,7 @@ public static class ClientToServerSignifiers
     public const int AddToGameSessionQueue = 3;
     public const int TicTacToePlay = 4;
     public const int LeaveSession = 5;
+    public const int PlayerMessage = 6;
 }
 
 public static class ServerToClientSignifiers
@@ -252,6 +282,7 @@ public static class ServerToClientSignifiers
     public const int GameSessionStarted = 2;
     public const int OpponentTicTacToePlay = 3;
     public const int SessionTerminated = 4;
+    public const int PlayerMessage = 5;
 }
 
 public static class SessionStartedResponses
@@ -272,6 +303,7 @@ public class PlayerAccount
 {
     public string name;
     public string password;
+    public int currentConnectionID = -1;
 
     public PlayerAccount(string Name, string Password)
     {
