@@ -274,6 +274,11 @@ public class NetworkedServer : MonoBehaviour
             gs.spectators.AddLast(id);
             SendMessageToClient(ServerToClientSignifiers.SpectateStarted + "," + gs.currentGameState, id);
         }
+        else if (signifier == ClientToServerSignifiers.KeypressMetrics)
+        {
+            int keyCode = int.Parse(csv[1]);
+            // Do something with the keycode...
+        }
     }
 
     private void SavePlayerAccounts()
@@ -364,6 +369,7 @@ public static class ClientToServerSignifiers
     public const int PlayerMessage = 6;
     public const int RequestSessionIDs = 7;
     public const int SpectateSession = 8;
+    public const int KeypressMetrics = 9;
 }
 
 public static class ServerToClientSignifiers
