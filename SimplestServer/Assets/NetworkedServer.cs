@@ -87,7 +87,7 @@ public class NetworkedServer : MonoBehaviour
 
             // Check for existing account
             bool isUnique = true;
-            foreach(PlayerAccount pa in playerAccounts)
+            foreach (PlayerAccount pa in playerAccounts)
             {
                 if (pa.name == username)
                 {
@@ -107,14 +107,14 @@ public class NetworkedServer : MonoBehaviour
             {
                 SendMessageToClient(ServerToClientSignifiers.LoginResponse + "," + LoginResponses.FailureNameInUse, id);
             }
-        } 
+        }
         else if (signifier == ClientToServerSignifiers.Login)
         {
             string username = csv[1];
             string password = csv[2];
 
             bool isFound = false;
-            foreach(PlayerAccount pa in playerAccounts)
+            foreach (PlayerAccount pa in playerAccounts)
             {
                 if (pa.name == username)
                 {
@@ -128,7 +128,7 @@ public class NetworkedServer : MonoBehaviour
                         SendMessageToClient(ServerToClientSignifiers.LoginResponse + "," + LoginResponses.FailureIncorrectPassword, id);
                     }
                     isFound = true;
-                    
+
                     break;
                 }
             }
@@ -160,40 +160,63 @@ public class NetworkedServer : MonoBehaviour
                     player1Response = SessionStartedResponses.CirclesPlayer;
                     player2Respnse = SessionStartedResponses.CrossesPlayer;
                 }
-                    
+
                 // Pass a signifier to both clients that they've joined
                 SendMessageToClient(ServerToClientSignifiers.GameSessionStarted + "," + player1Response, id);
                 SendMessageToClient(ServerToClientSignifiers.GameSessionStarted + "," + player2Respnse, playerWaitingForMatch);
                 playerWaitingForMatch = -1;
             }
-            
+
         }
         else if (signifier == ClientToServerSignifiers.TicTacToePlay)
         {
             Debug.Log("our next action beckons");
 
             GameSession gs = FindGameSessionWithPlayerID(id);
-            
+
             // We have the game state on the server, forward it to the other player
             string currentGameState = csv[1];
+            gs.currentGameState = currentGameState;
 
             if (gs.playerID1 == id)
                 SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "," + currentGameState, gs.playerID2);
             else
                 SendMessageToClient(ServerToClientSignifiers.OpponentTicTacToePlay + "," + currentGameState, gs.playerID1);
+            
+            foreach(int spectatorID in gs.spectators)
+            {
+                SendMessageToClient(ServerToClientSignifiers.SpectatorUpdate + "," + currentGameState, spectatorID);
+            }
         }
         else if (signifier == ClientToServerSignifiers.LeaveSession)
         {
             GameSession gs = FindGameSessionWithPlayerID(id);
             if (gs == null)
             {
-                // No session associated with the id
+                // The connection id is not a player id
+                // It might be a spectator id
+
+                gs = FindSessionWithSpectatorID(id);
+
+                if (gs == null)
+                {
+                    Debug.LogError(id + " not a player or a spectator?!");
+                    return;
+                }
+
+                // Only remove the spectator ID, do not terminate the session
+                gs.spectators.Remove(id);
                 return;
             }
 
             // Notify both players that session is terminated
             SendMessageToClient(ServerToClientSignifiers.SessionTerminated + "", gs.playerID1);
             SendMessageToClient(ServerToClientSignifiers.SessionTerminated + "", gs.playerID2);
+            foreach (int spectatorID in gs.spectators)
+            {
+                SendMessageToClient(ServerToClientSignifiers.SessionTerminated + "", spectatorID);
+            }
+
             gameSessions.Remove(gs);
         }
         else if (signifier == ClientToServerSignifiers.PlayerMessage)
@@ -201,15 +224,55 @@ public class NetworkedServer : MonoBehaviour
             GameSession gs = FindGameSessionWithPlayerID(id);
             if (gs == null)
             {
-                // No session associated with the id, no need to send the message
-                return;
+                // The connection id is not a player id
+                // It might be a spectator id
+
+                gs = FindSessionWithSpectatorID(id);
+
+                if (gs == null)
+                {
+                    Debug.LogError(id + " not a player or a spectator?!");
+                    return;
+                }
+
+                // continue with the logic
             }
 
             string playerMessage = msg.Substring(2, msg.Length - 2);
-            if (gs.playerID1 == id)
-                SendMessageToClient(ServerToClientSignifiers.PlayerMessage + "," + playerMessage, gs.playerID2);
-            else
+            if (gs.playerID1 != id)
                 SendMessageToClient(ServerToClientSignifiers.PlayerMessage + "," + playerMessage, gs.playerID1);
+            if (gs.playerID2 != id)
+                SendMessageToClient(ServerToClientSignifiers.PlayerMessage + "," + playerMessage, gs.playerID2);
+
+            foreach (int spectateorId in gs.spectators)
+            {
+                if (spectateorId != id)
+                    SendMessageToClient(ServerToClientSignifiers.PlayerMessage + "," + playerMessage, spectateorId);
+            }
+        }
+        else if (signifier == ClientToServerSignifiers.RequestSessionIDs)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append(ServerToClientSignifiers.SessionIDResponse);
+            sb.Append(",");
+            foreach (GameSession gs in gameSessions)
+            {
+                sb.Append(gs.sessionID);
+                sb.Append(",");
+            }
+            SendMessageToClient(sb.ToString(), id);
+        }
+        else if (signifier == ClientToServerSignifiers.SpectateSession)
+        {
+            int sessionId = int.Parse(csv[1]);
+            GameSession gs = FindGameSessionWithID(sessionId);
+            if (gs == null)
+            {
+                Debug.LogWarning("Unable to spectate session " + csv[1]);
+                return;
+            }
+            gs.spectators.AddLast(id);
+            SendMessageToClient(ServerToClientSignifiers.SpectateStarted + "," + gs.currentGameState, id);
         }
     }
 
@@ -253,6 +316,31 @@ public class NetworkedServer : MonoBehaviour
         return null;
     }
 
+    private GameSession FindGameSessionWithID(int id)
+    {
+        foreach (GameSession gs in gameSessions)
+        {
+            if (gs.sessionID == id)
+            {
+                return gs;
+            }
+        }
+
+        return null;
+    }
+
+    private GameSession FindSessionWithSpectatorID(int id)
+    {
+        foreach (GameSession gs in gameSessions)
+        {
+            foreach (int spectatorID in gs.spectators)
+            {
+                if (spectatorID == id) return gs;
+            }
+        }
+        return null;
+    }
+
     private PlayerAccount FindPlayerByConnectionID(int connectionID)
     {
         foreach (PlayerAccount pa in playerAccounts)
@@ -274,6 +362,8 @@ public static class ClientToServerSignifiers
     public const int TicTacToePlay = 4;
     public const int LeaveSession = 5;
     public const int PlayerMessage = 6;
+    public const int RequestSessionIDs = 7;
+    public const int SpectateSession = 8;
 }
 
 public static class ServerToClientSignifiers
@@ -283,6 +373,9 @@ public static class ServerToClientSignifiers
     public const int OpponentTicTacToePlay = 3;
     public const int SessionTerminated = 4;
     public const int PlayerMessage = 5;
+    public const int SessionIDResponse = 6;
+    public const int SpectateStarted = 7;
+    public const int SpectatorUpdate = 8;
 }
 
 public static class SessionStartedResponses
@@ -315,9 +408,17 @@ public class PlayerAccount
 public class GameSession
 {
     public int playerID1, playerID2;
+    public LinkedList<int> spectators;
+    public string currentGameState = "000000000";
+    public int sessionID;
+    private static int SessionCounter = 1;
+
     public GameSession(int PlayerID1, int PlayerID2)
     {
         playerID1 = PlayerID1;
         playerID2 = PlayerID2;
+        spectators = new LinkedList<int>();
+        sessionID = SessionCounter;
+        SessionCounter++;
     }
 }
